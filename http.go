@@ -96,7 +96,7 @@ func GetNotFoundHandler(getLogArgs func(ctx context.Context) []any) http.Handler
 // the request headers. If it is not present, it generates a new UUID and adds
 // it to the request context. This allows downstream handlers to access the
 // request ID for logging or tracing purposes.
-func UseRequestID(headerName string, next http.Handler) http.Handler {
+func UseRequestID(next http.Handler, headerName string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := r.Header.Get(headerName)
 		if id == "" {
@@ -113,7 +113,7 @@ func UseRequestID(headerName string, next http.Handler) http.Handler {
 // including the method, path, duration, and request ID. It uses the slog
 // package for structured logging. The duration is calculated from the start of the
 // request to the completion of the response.
-func UseRequestLogging(getLogArgs func(ctx context.Context) []any, next http.Handler) http.Handler {
+func UseRequestLogging(next http.Handler, getLogArgs func(ctx context.Context) []any) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
@@ -147,11 +147,11 @@ func UseRequestLogging(getLogArgs func(ctx context.Context) []any, next http.Han
 // processing the request further. For other methods, it calls the next handler
 // in the chain.
 func UseCORS(
+	next http.Handler,
 	allowedOrigins []string,
 	allowedHeaders []string,
 	allowedMethods []string,
 	getLogArgs func(ctx context.Context) []any,
-	next http.Handler,
 ) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
