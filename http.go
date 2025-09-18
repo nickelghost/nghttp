@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/nickelghost/ngtel"
 )
 
 // DefaultRequestIDHeader is the default header name used for the request ID.
@@ -31,11 +30,24 @@ type GenericResponse struct {
 // Respond is a utility function to send a JSON response with a specific HTTP
 // status code. It logs the request ID and trace path, and handles different
 // levels of errors based on the status code.
-func Respond(w http.ResponseWriter, r *http.Request, code int, err error, res any) {
+func Respond(
+	w http.ResponseWriter,
+	r *http.Request,
+	code int,
+	err error,
+	res any,
+	getLogArgs func(ctx context.Context) []any,
+) {
 	ctx := r.Context()
 	requestID, _ := ctx.Value(RequestIDKey).(string)
 	statusText := http.StatusText(code)
-	logger := slog.With("requestID", requestID, "trace", ngtel.GetCloudTracePath(ctx))
+	logger := slog.With("requestID", requestID)
+
+	if getLogArgs != nil {
+		if logArgs := getLogArgs(ctx); logArgs != nil {
+			logger = logger.With(logArgs...)
+		}
+	}
 
 	switch {
 	case code >= http.StatusInternalServerError:
@@ -60,16 +72,24 @@ func Respond(w http.ResponseWriter, r *http.Request, code int, err error, res an
 // RespondGeneric is a convenience function to respond with a generic message
 // based on the provided HTTP status code. It uses the http.StatusText for the
 // message and does not include any additional data in the response body.
-func RespondGeneric(w http.ResponseWriter, r *http.Request, code int, err error) {
+func RespondGeneric(
+	w http.ResponseWriter,
+	r *http.Request,
+	code int,
+	err error,
+	getLogArgs func(ctx context.Context) []any,
+) {
 	res := GenericResponse{Message: http.StatusText(code)}
-	Respond(w, r, code, err, res)
+	Respond(w, r, code, err, res, getLogArgs)
 }
 
-// NotFoundHandler is a handler function that responds with a 404 Not Found
+// GetNotFoundHandler returns a handler function that responds with a 404 Not Found
 // status code. It uses the RespondGeneric function to send a generic response
 // with the appropriate status message.
-func NotFoundHandler(w http.ResponseWriter, r *http.Request) {
-	RespondGeneric(w, r, http.StatusNotFound, nil)
+func GetNotFoundHandler(getLogArgs func(ctx context.Context) []any) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		RespondGeneric(w, r, http.StatusNotFound, nil, getLogArgs)
+	}
 }
 
 // UseRequestID is a middleware that checks for the presence of a request ID in
@@ -91,26 +111,31 @@ func UseRequestID(headerName string, next http.Handler) http.Handler {
 
 // UseRequestLogging is a middleware that logs the details of each HTTP request
 // including the method, path, duration, and request ID. It uses the slog
-// package for structured logging and includes the trace path from ngtel for
-// better observability. The duration is calculated from the start of the
+// package for structured logging. The duration is calculated from the start of the
 // request to the completion of the response.
-func UseRequestLogging(next http.Handler) http.Handler {
+func UseRequestLogging(getLogArgs func(ctx context.Context) []any, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		ctx := r.Context()
 
 		next.ServeHTTP(w, r)
 
+		ctx := r.Context()
 		requestID, _ := ctx.Value(RequestIDKey).(string)
 
-		slog.Info(
-			"Request completed",
+		logger := slog.With(
 			"method", r.Method,
 			"path", r.URL.Path,
 			"duration", time.Since(start),
 			"requestID", requestID,
-			"trace", ngtel.GetCloudTracePath(ctx),
 		)
+
+		if getLogArgs != nil {
+			if logArgs := getLogArgs(ctx); logArgs != nil {
+				logger = logger.With(logArgs...)
+			}
+		}
+
+		logger.Info("Request completed")
 	})
 }
 
@@ -122,7 +147,11 @@ func UseRequestLogging(next http.Handler) http.Handler {
 // processing the request further. For other methods, it calls the next handler
 // in the chain.
 func UseCORS(
-	allowedOrigins []string, allowedHeaders []string, allowedMethods []string, next http.Handler,
+	allowedOrigins []string,
+	allowedHeaders []string,
+	allowedMethods []string,
+	getLogArgs func(ctx context.Context) []any,
+	next http.Handler,
 ) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
@@ -137,7 +166,7 @@ func UseCORS(
 		w.Header().Set("Access-Control-Allow-Methods", strings.Join(allowedMethods, ", "))
 
 		if r.Method == http.MethodOptions {
-			RespondGeneric(w, r, http.StatusOK, nil)
+			RespondGeneric(w, r, http.StatusOK, nil, getLogArgs)
 
 			return
 		}
