@@ -6,6 +6,12 @@ linters:
     - depguard
     - exhaustruct
     - gochecknoglobals
-    - godox
+    - noinlineerr
     - ireturn
     - varnamelen
+    - wsl
+  settings:
+    revive:
+      rules:
+        - name: package-comments
+          disabled: true

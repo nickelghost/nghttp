@@ -103,7 +103,7 @@ func UseRequestID(next http.Handler, headerName string) http.Handler {
 			id = uuid.NewString()
 		}
 
-		ctx := context.WithValue(r.Context(), RequestIDKey, id) //nolint:revive,staticcheck
+		ctx := context.WithValue(r.Context(), RequestIDKey, id) //nolint:staticcheck
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
