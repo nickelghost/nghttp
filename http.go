@@ -17,8 +17,18 @@ import (
 // DefaultRequestIDHeader is the default header name used for the request ID.
 const DefaultRequestIDHeader = "X-Request-ID"
 
-// RequestIDKey is the key used to store the request ID in the context.
-const RequestIDKey = "requestID"
+type contextKey string
+
+const requestIDKey = contextKey("requestID")
+
+// GetRequestID returns the trace ID from the context if it exists.
+func GetRequestID(ctx context.Context) string {
+	if id, ok := ctx.Value(requestIDKey).(string); ok {
+		return id
+	}
+
+	return ""
+}
 
 // GenericResponse is a simple structure used for responses without any
 // additional data, instead only containing a message. It is mostly used for
@@ -39,7 +49,7 @@ func Respond(
 	getLogArgs func(ctx context.Context) []any,
 ) {
 	ctx := r.Context()
-	requestID, _ := ctx.Value(RequestIDKey).(string)
+	requestID := GetRequestID(ctx)
 	statusText := http.StatusText(code)
 	logger := slog.With("requestID", requestID)
 
@@ -58,12 +68,11 @@ func Respond(
 		logger.Info(statusText)
 	}
 
-	w.Header().Add("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 
 	if err := json.NewEncoder(w).Encode(res); err != nil {
 		logger.Error("failed to encode response", "err", err)
-		w.WriteHeader(http.StatusInternalServerError)
 
 		return
 	}
@@ -103,7 +112,9 @@ func UseRequestID(next http.Handler, headerName string) http.Handler {
 			id = uuid.NewString()
 		}
 
-		ctx := context.WithValue(r.Context(), RequestIDKey, id) //nolint:staticcheck
+		w.Header().Set(headerName, id)
+
+		ctx := context.WithValue(r.Context(), requestIDKey, id)
 
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
@@ -120,7 +131,7 @@ func UseRequestLogging(next http.Handler, getLogArgs func(ctx context.Context) [
 		next.ServeHTTP(w, r)
 
 		ctx := r.Context()
-		requestID, _ := ctx.Value(RequestIDKey).(string)
+		requestID := GetRequestID(ctx)
 
 		logger := slog.With(
 			"method", r.Method,
@@ -157,8 +168,10 @@ func UseCORS(
 		origin := r.Header.Get("Origin")
 
 		for _, allowedOrigin := range allowedOrigins {
-			if allowedOrigin == origin {
+			if allowedOrigin == origin || allowedOrigin == "*" {
 				w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+
+				break
 			}
 		}
 
