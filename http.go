@@ -173,6 +173,13 @@ func UseRequestLogging(next http.Handler, getLogArgs func(ctx context.Context) [
 // set to "true", enabling credentialed requests (e.g. cookies, Authorization
 // headers). Note that browsers will reject credentialed responses when
 // Access-Control-Allow-Origin is "*"; use explicit origins instead.
+//
+// Note: OPTIONS preflight responses include a request ID in their logs via
+// [GetRequestID]. For this to work correctly, [UseRequestID] must be applied
+// before UseCORS in the middleware chain:
+//
+//	handler = nghttp.UseRequestID(handler, nghttp.DefaultRequestIDHeader)
+//	handler = nghttp.UseCORS(handler, origins, headers, methods, false, nil)
 func UseCORS(
 	next http.Handler,
 	allowedOrigins []string,
