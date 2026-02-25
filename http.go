@@ -96,10 +96,15 @@ func GetNotFoundHandler(getLogArgs func(ctx context.Context) []any) http.Handler
 // the request headers. If it is not present, it generates a new UUID and adds
 // it to the request context. This allows downstream handlers to access the
 // request ID for logging or tracing purposes.
-func UseRequestID(next http.Handler, headerName string) http.Handler {
+//
+// maxIDLen sets the maximum accepted byte length of an incoming request ID. If
+// the header value exceeds this limit it is discarded and a fresh UUID is used
+// instead, guarding against log injection. Set maxIDLen to 0 to disable the
+// limit entirely.
+func UseRequestID(next http.Handler, headerName string, maxIDLen int) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := r.Header.Get(headerName)
-		if id == "" {
+		if id == "" || (maxIDLen > 0 && len(id) > maxIDLen) {
 			id = uuid.NewString()
 		}
 
