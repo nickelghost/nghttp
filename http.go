@@ -172,11 +172,17 @@ func UseRequestLogging(next http.Handler, getLogArgs func(ctx context.Context) [
 // responds with a 200 OK status and the appropriate CORS headers without
 // processing the request further. For other methods, it calls the next handler
 // in the chain.
+//
+// When allowCredentials is true, the Access-Control-Allow-Credentials header is
+// set to "true", enabling credentialed requests (e.g. cookies, Authorization
+// headers). Note that browsers will reject credentialed responses when
+// Access-Control-Allow-Origin is "*"; use explicit origins instead.
 func UseCORS(
 	next http.Handler,
 	allowedOrigins []string,
 	allowedHeaders []string,
 	allowedMethods []string,
+	allowCredentials bool,
 	getLogArgs func(ctx context.Context) []any,
 ) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -192,6 +198,10 @@ func UseCORS(
 
 		w.Header().Set("Access-Control-Allow-Headers", strings.Join(allowedHeaders, ", "))
 		w.Header().Set("Access-Control-Allow-Methods", strings.Join(allowedMethods, ", "))
+
+		if allowCredentials {
+			w.Header().Set("Access-Control-Allow-Credentials", "true")
+		}
 
 		if r.Method == http.MethodOptions {
 			RespondGeneric(w, r, http.StatusOK, nil, getLogArgs)
