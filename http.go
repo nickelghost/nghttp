@@ -120,15 +120,29 @@ func UseRequestID(next http.Handler, headerName string) http.Handler {
 	})
 }
 
+// loggingResponseWriter wraps http.ResponseWriter to capture the status code
+// written by the handler, so it can be included in request logs.
+type loggingResponseWriter struct {
+	http.ResponseWriter
+
+	statusCode int
+}
+
+func (lrw *loggingResponseWriter) WriteHeader(code int) {
+	lrw.statusCode = code
+	lrw.ResponseWriter.WriteHeader(code)
+}
+
 // UseRequestLogging is a middleware that logs the details of each HTTP request
-// including the method, path, duration, and request ID. It uses the slog
+// including the method, path, status code, duration, and request ID. It uses the slog
 // package for structured logging. The duration is calculated from the start of the
 // request to the completion of the response.
 func UseRequestLogging(next http.Handler, getLogArgs func(ctx context.Context) []any) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
-		next.ServeHTTP(w, r)
+		lrw := &loggingResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+		next.ServeHTTP(lrw, r)
 
 		ctx := r.Context()
 		requestID := GetRequestID(ctx)
@@ -136,6 +150,7 @@ func UseRequestLogging(next http.Handler, getLogArgs func(ctx context.Context) [
 		logger := slog.With(
 			"method", r.Method,
 			"path", r.URL.Path,
+			"status", lrw.statusCode,
 			"duration", time.Since(start),
 			"requestID", requestID,
 		)
