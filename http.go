@@ -39,7 +39,8 @@ type GenericResponse struct {
 
 // Respond is a utility function to send a JSON response with a specific HTTP
 // status code. It logs the request ID and trace path, and handles different
-// levels of errors based on the status code.
+// levels of errors based on the status code. If res is nil, a generic
+// {"message": "<status text>"} body is sent instead of null.
 func Respond(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -66,6 +67,10 @@ func Respond(
 		logger.Warn(statusText, "err", err)
 	default:
 		logger.Info(statusText)
+	}
+
+	if res == nil {
+		res = GenericResponse{Message: http.StatusText(code)}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
