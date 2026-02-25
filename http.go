@@ -83,26 +83,12 @@ func Respond(
 	}
 }
 
-// RespondGeneric is a convenience function to respond with a generic message
-// based on the provided HTTP status code. It uses the http.StatusText for the
-// message and does not include any additional data in the response body.
-func RespondGeneric(
-	w http.ResponseWriter,
-	r *http.Request,
-	code int,
-	err error,
-	getLogArgs func(ctx context.Context) []any,
-) {
-	res := GenericResponse{Message: http.StatusText(code)}
-	Respond(w, r, code, err, res, getLogArgs)
-}
-
 // GetNotFoundHandler returns a handler function that responds with a 404 Not Found
-// status code. It uses the RespondGeneric function to send a generic response
+// status code. It uses the Respond function to send a generic response
 // with the appropriate status message.
 func GetNotFoundHandler(getLogArgs func(ctx context.Context) []any) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		RespondGeneric(w, r, http.StatusNotFound, nil, getLogArgs)
+		Respond(w, r, http.StatusNotFound, nil, nil, getLogArgs)
 	}
 }
 
@@ -209,7 +195,7 @@ func UseCORS(
 		}
 
 		if r.Method == http.MethodOptions {
-			RespondGeneric(w, r, http.StatusOK, nil, getLogArgs)
+			Respond(w, r, http.StatusOK, nil, nil, getLogArgs)
 
 			return
 		}
