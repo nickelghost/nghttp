@@ -19,7 +19,10 @@ const DefaultRequestIDHeader = "X-Request-ID"
 
 type contextKey string
 
-const requestIDKey = contextKey("requestID")
+const (
+	requestIDKey     = contextKey("requestID")
+	maxUUIDStringLen = 36
+)
 
 // GetRequestID returns the trace ID from the context if it exists.
 func GetRequestID(ctx context.Context) string {
@@ -99,11 +102,18 @@ func GetNotFoundHandler(getLogArgs func(ctx context.Context) []any) http.Handler
 //
 // maxIDLen sets the maximum accepted byte length of an incoming request ID. If
 // the header value exceeds this limit it is discarded and a fresh UUID is used
-// instead, guarding against log injection. Set maxIDLen to 0 to disable the
-// limit entirely.
+// instead, guarding against log injection. Set maxIDLen to 0 to use the
+// default limit, which is the length of a UUID string (36 bytes). Set maxIDLen
+// to a negative value to disable the length check entirely — this is not
+// recommended as it may allow log injection via untrusted request headers.
 func UseRequestID(next http.Handler, headerName string, maxIDLen int) http.Handler {
+	if maxIDLen == 0 {
+		maxIDLen = maxUUIDStringLen
+	}
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := r.Header.Get(headerName)
+		// set ID to a new UUID if the header is missing or exceeds the maximum length
 		if id == "" || (maxIDLen > 0 && len(id) > maxIDLen) {
 			id = uuid.NewString()
 		}
